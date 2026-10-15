@@ -66,10 +66,6 @@ pub fn lfs_warning(name: &str) -> String {
 }
 
 // ---- Table printers ----
-// Datasets-bench layout with postgres-specific columns: the lossy column is
-// spelled `PcoPack time_round` for backends and stats, `PcoPack (lossy)`
-// for explains (the shared printer says `(lossy)` because the public
-// datasets round with `float_round` too: openalex, osm).
 
 #[derive(Debug)]
 pub struct CodecRow {
@@ -99,27 +95,54 @@ impl markdown_tables::MarkdownTableRow for CodecRow {
     }
 }
 
-/// query_explains: the codec table with a single `PcoPack (lossy)` column.
+/// query_explains: the five PcoPack scenarios in one table. string keeps the
+/// JSON payload as a plain string (the way Vortex stores it); JSON keeps the
+/// `serde_json::Value` tree; arena replaces `output_json` with the flattened
+/// plan-tree arena of `postgres/arena.rs`; the lossy variants add
+/// `float_round = 2` (plus `time_round = 1 s` on the rows).
 #[derive(Debug)]
-pub struct CodecRowLossy {
+pub struct CodecRowPcoPack {
     pub metric: String,
-    pub pco_pack: String,
-    pub pco_pack_lossy: String,
+    pub text: String,
+    pub json: String,
+    pub json_lossy: String,
+    pub arena: String,
+    pub arena_lossy: String,
+}
+
+impl markdown_tables::MarkdownTableRow for CodecRowPcoPack {
+    fn column_names() -> Vec<&'static str> {
+        vec!["Metric", "text", "JSON", "JSON lossy", "arena", "arena lossy"]
+    }
+    fn column_values(&self) -> Vec<String> {
+        vec![
+            self.metric.clone(),
+            self.text.clone(),
+            self.json.clone(),
+            self.json_lossy.clone(),
+            self.arena.clone(),
+            self.arena_lossy.clone(),
+        ]
+    }
+}
+
+/// query_explains: the non-PcoPack crates in their own table.
+#[derive(Debug)]
+pub struct CodecRowOther {
+    pub metric: String,
     pub vortex: String,
     pub columnar: String,
     pub serde_columnar: String,
     pub msgpack: String,
 }
 
-impl markdown_tables::MarkdownTableRow for CodecRowLossy {
+impl markdown_tables::MarkdownTableRow for CodecRowOther {
     fn column_names() -> Vec<&'static str> {
-        vec!["Metric", "PcoPack", "PcoPack (lossy)", "Vortex", "columnar", "serde_columnar", "msgpack"]
+        vec!["Metric", "Vortex", "columnar", "serde_columnar", "msgpack"]
     }
     fn column_values(&self) -> Vec<String> {
         vec![
             self.metric.clone(),
-            self.pco_pack.clone(),
-            self.pco_pack_lossy.clone(),
             self.vortex.clone(),
             self.columnar.clone(),
             self.serde_columnar.clone(),

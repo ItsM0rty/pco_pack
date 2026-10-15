@@ -399,18 +399,35 @@ Real Postgres monitoring datasets sourced from pganalyze.
 
 ### query_explains (237651 rows)
 
-| Metric        | PcoPack  | PcoPack (lossy) | Vortex   | columnar | serde_columnar | msgpack  |
-|---------------|----------|-----------------|----------|----------|----------------|----------|
-| Size          | 82.0 MB  | 76.0 MB         | 122.5 MB | 127.1 MB | 123.3 MB       | 110.3 MB |
-| Serialize     | 4.8 s    | 4.1 s           | 5.1 s    | 1.8 s    | 4.8 s          | 2.3 s    |
-| Deserialize   | 7.5 s    | 7.3 s           | 744.9 ms | 623.5 ms | 880.5 ms       | 5.3 s    |
-| Filter 0.55%  | 1.7 s    | 1.7 s           | 18.6 ms  | 619.0 ms | 851.6 ms       | 5.1 s    |
-| Filter 12.48% | 4.5 s    | 4.5 s           | 542.1 ms | 618.9 ms | 848.3 ms       | 4.7 s    |
-| Filter 12.97% | 151.8 ms | 152.6 ms        | 559.7 ms | 620.7 ms | 872.4 ms       | 4.5 s    |
+This data model is dominated by large Postgres EXPLAIN plans represented as JSON.
 
-- PcoPack and msgpack store `serde_json::Value` while the other store a string because they don't support JSON storage directly. This difference explains PcoPack's smaller compressed size and larger serialization time.
-- PcoPack is ~33% smaller than Vortex and serializes in about the same time.
-- PcoPack (lossy) uses `float_round = 2, time_round = 1s` to cut another ~7%. Float rounding removes sub-millisecond precision
+#### PcoPack scenarios
+
+| Metric        | text     | JSON     | JSON lossy | arena    | arena lossy |
+|---------------|----------|----------|------------|----------|-------------|
+| Size          | 91.7 MB  | 82.0 MB  | 76.0 MB    | 57.7 MB  | 55.6 MB     |
+| Serialize     | 1.7 s    | 4.6 s    | 4.2 s      | 4.4 s    | 4.1 s       |
+| Deserialize   | 974.4 ms | 7.5 s    | 7.5 s      | 1.9 s    | 1.9 s       |
+| Filter 0.55%  | 672.9 ms | 1.8 s    | 1.7 s      | 567.0 ms | 517.9 ms    |
+| Filter 12.48% | 658.2 ms | 4.5 s    | 4.6 s      | 793.1 ms | 770.5 ms    |
+| Filter 12.97% | 25.7 ms  | 154.3 ms | 151.4 ms   | 49.0 ms  | 45.6 ms     |
+
+- PcoPack even when storing the explain JSON as text outperforms the other crates. When storing JSON, PcoPack reduces compressed size but much more time is spent serializing.
+- JSON lossy uses `float_round = 2, time_round = 1s` to cut ~7% off the JSON path. Float rounding removes sub-millisecond precision.
+- The arena (AKA struct of array) scenarios replace the JSON tree with a flattened typed arena of native columns. Arena is ~30% smaller than JSON, and lossy arena shaves ~3% more. Arena deserialization is ~4x faster than JSON, and filters are ~3x faster.
+
+#### Other crates
+
+| Metric        | Vortex   | columnar | serde_columnar | msgpack  |
+|---------------|----------|----------|----------------|----------|
+| Size          | 122.5 MB | 127.1 MB | 123.3 MB       | 110.3 MB |
+| Serialize     | 5.2 s    | 1.8 s    | 4.8 s          | 2.3 s    |
+| Deserialize   | 729.4 ms | 636.2 ms | 935.2 ms       | 5.5 s    |
+| Filter 0.55%  | 19.4 ms  | 626.0 ms | 857.5 ms       | 5.4 s    |
+| Filter 12.48% | 553.3 ms | 623.9 ms | 850.3 ms       | 4.9 s    |
+| Filter 12.97% | 569.0 ms | 628.0 ms | 857.8 ms       | 4.8 s    |
+
+- Vortex, columnar, and serde_columnar store the JSON as text; the same as the PcoPack text scenario.
 
 ### query_stats_1min (29970299 rows)
 
