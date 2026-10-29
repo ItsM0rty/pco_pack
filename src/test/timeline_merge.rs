@@ -1,4 +1,5 @@
-use pco_pack::{PcoPack, Timeline};
+use crate as pco_pack;
+use crate::{PcoPack, Timeline};
 
 fn bucketed(points: &[i64]) -> Timeline<10> {
     let mut timeline = Timeline::new();
